@@ -1,0 +1,1389 @@
+<!doctype html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  IMPLEMENTATION NOTE FOR ENGINEERING
+  ═══════════════════════════════════════════════════════════════════════════
+  This mockup is rendered with Polaris React (@shopify/polaris) for design
+  fidelity in a standalone preview.
+
+  When implementing the actual Shopify admin embedded app, use Polaris Web
+  Components (https://shopify.dev/docs/api/app-home/web-components) instead.
+  They are the recommended path for embedded admin apps and inherit Shopify's
+  live design tokens automatically.
+
+  Component mapping (React → Web Component):
+    <Page>            → <s-page heading slot="primary-action" slot="secondary-actions">
+    <Card>/<Section>  → <s-section heading>
+    <BlockStack>      → <s-stack direction="block" gap>
+    <InlineStack>     → <s-stack direction="inline" gap>
+    <Grid>            → <s-grid grid-template-columns gap>
+    <DataTable>       → <s-table> + <s-table-header-row>/<s-table-header
+                                       list-slot format>/<s-table-body>/
+                                       <s-table-row click-delegate>/<s-table-cell>
+    <Button>          → <s-button variant="primary|secondary">
+    <Badge>           → <s-badge tone="info|success|warning|critical|neutral">
+    <Banner>          → <s-banner tone heading>
+    <TextField>       → <s-text-field label value>
+    <Select>          → <s-select label> + plain <option>
+    <Checkbox>        → <s-checkbox label checked>
+    <Text>            → <s-text type="strong|subdued">
+    <Heading>         → <s-heading>
+    <Link>            → <s-link href>
+    <Divider>         → <s-divider>
+    Tabs (Polaris)    → No s-tabs exists. Build a custom tab strip OR pivot
+                        to multiple admin nav items (preferred).
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Supercharge — Quote App Admin</title>
+<link rel="stylesheet" href="https://unpkg.com/@shopify/polaris@13.9.5/build/esm/styles.css"/>
+<link rel="stylesheet" href="tokens-overlay.css"/>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="module">
+  // Pre-load ESM deps and stash on window so Babel-compiled code can use them
+  const [reactMod, rdomMod, rdomClientMod, polarisMod, iconsMod, en] = await Promise.all([
+    import('https://esm.sh/react@18.3.1'),
+    import('https://esm.sh/react-dom@18.3.1'),
+    import('https://esm.sh/react-dom@18.3.1/client'),
+    import('https://esm.sh/@shopify/polaris@13.9.5?deps=react@18.3.1,react-dom@18.3.1'),
+    import('https://esm.sh/@shopify/polaris-icons@9.3.0?deps=react@18.3.1'),
+    fetch('https://esm.sh/@shopify/polaris@13.9.5/locales/en.json').then(r => r.json()),
+  ]);
+  window.React = reactMod.default || reactMod;
+  window.ReactDOM = rdomMod.default || rdomMod;
+  window.ReactDOMClient = rdomClientMod;
+  window.Polaris = polarisMod;
+  window.PolarisIcons = iconsMod;
+  window.enTranslations = en;
+  // Load Babel + app
+  await new Promise(res => { const s = document.createElement('script'); s.src = 'https://unpkg.com/@babel/standalone@7.29.0/babel.min.js'; s.onload = res; document.head.appendChild(s); });
+  const appCode = document.getElementById('app-code').textContent;
+  const out = Babel.transform(appCode, { presets: ['react'] }).code;
+  const tag = document.createElement('script');
+  tag.textContent = out;
+  document.body.appendChild(tag);
+</script>
+
+<script type="text/plain" id="app-code">
+const { useState, useMemo, useCallback } = React;
+const { createRoot } = ReactDOMClient;
+const {
+  AppProvider, Frame, TopBar, Navigation, Page, Layout, Card, BlockStack, InlineStack,
+  InlineGrid, Box, Text, Button, ButtonGroup, Badge, Banner, Divider, TextField, Select,
+  Checkbox, ChoiceList, FormLayout, IndexTable, IndexFilters, useIndexResourceState,
+  Tabs, Bleed, Tooltip, Icon, RangeSlider, ProgressBar, Modal, Tag, Link, Collapsible
+} = Polaris;
+const PIcon = Icon;
+const {
+  HomeIcon, OrderIcon, PageIcon, SettingsIcon, NotificationIcon, StoreIcon, EditIcon,
+  DeleteIcon, ViewIcon, EmailIcon, DuplicateIcon, ArrowDownIcon, PlusIcon, SearchIcon,
+  PersonIcon, CalendarIcon, ChevronRightIcon, ChevronDownIcon, RefreshIcon
+} = PolarisIcons;
+
+// ───── helpers ─────
+const monoStyle = { fontFamily: 'var(--p-font-family-mono)' };
+const Mono = ({ children, variant = 'bodyMd' }) => (
+  <Text as="span" variant={variant}><span style={monoStyle}>{children}</span></Text>
+);
+const fmt$ = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+// ───── fixtures ─────
+const QUOTES = [
+  { id: 'D2895', title: 'Q4 facility expansion — wiring kit', customer: 'James Rodriguez', company: 'Atlas Industries', status: 'open', created: '2026-04-22', expires: '2026-07-21', total: 28381.50, items: 24, owner: 'Morgan Ellis' },
+  { id: 'D2894', title: 'Spring panel restock', customer: 'Sarah Kim', company: 'Redline Supply Co', status: 'completed', created: '2026-04-19', expires: '2026-07-18', total: 12480.00, items: 8, owner: 'Priya Shah' },
+  { id: 'D2893', title: 'Substation upgrade — Phase II', customer: 'Tom Nguyen', company: 'Greenfield Mfg', status: 'open', created: '2026-04-18', expires: '2026-07-17', total: 84200.00, items: 42, owner: 'Morgan Ellis' },
+  { id: 'D2892', title: 'Tooling refresh Q2', customer: 'Lisa Park', company: 'Pacific Wholesale', status: 'pending', created: '2026-04-15', expires: '2026-07-14', total: 4892.25, items: 12, owner: 'Jordan Park' },
+  { id: 'D2891', title: 'Bus bar replacements', customer: 'David Chen', company: 'Summit Electric', status: 'expired', created: '2026-01-12', expires: '2026-04-12', total: 18750.00, items: 6, owner: 'Priya Shah' },
+  { id: 'D2890', title: 'Junction boxes — annual order', customer: 'James Rodriguez', company: 'Atlas Industries', status: 'completed', created: '2026-01-08', expires: '2026-04-08', total: 6320.75, items: 18, owner: 'Morgan Ellis' },
+];
+const SF_QUOTES = [
+  { id: 'D2895', title: 'Q4 facility expansion', date: 'Apr 22, 2026', status: 'open', total: 28381.50, items: 24 },
+  { id: 'D2890', title: 'Junction boxes annual', date: 'Jan 8, 2026', status: 'completed', total: 6320.75, items: 18 },
+  { id: 'D2891', title: 'Bus bar replacements', date: 'Jan 12, 2026', status: 'expired', total: 18750.00, items: 6 },
+  { id: 'D2880', title: 'Warehouse retrofit', date: 'Dec 18, 2025', status: 'open', total: 11240.00, items: 32 },
+];
+const STATUS_TONE = { open: 'info', completed: 'success', pending: 'warning', expired: undefined };
+
+// ───── Frame chrome (TopBar + Navigation) ─────
+function useShell() {
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenu = (
+    <TopBar.UserMenu
+      actions={[{ items: [{ content: 'Account' }, { content: 'Sign out' }] }]}
+      name="James Rodriguez"
+      detail="Atlas Industries"
+      initials="JR"
+      open={userMenuOpen}
+      onToggle={() => setUserMenuOpen(o => !o)}
+    />
+  );
+  const topBar = <TopBar showNavigationToggle userMenu={userMenu} />;
+  return { topBar };
+}
+
+const NavSidebar = ({ page, onNav }) => (
+  <Navigation location="/">
+    <Navigation.Section
+      title="B2B Supercharge"
+      items={[
+        { label: 'Dashboard', icon: HomeIcon, selected: page === 'dashboard', onClick: () => onNav('dashboard') },
+        { label: 'Quotes', icon: OrderIcon, selected: page === 'quotes' || page === 'quote-detail', badge: '6', onClick: () => onNav('quotes') },
+        { label: 'Companies', icon: StoreIcon, onClick: () => onNav('companies') },
+      ]}
+    />
+    <Navigation.Section
+      title="Settings"
+      separator
+      items={[
+        { label: 'Quote list', icon: PageIcon, selected: page === 'list-settings', onClick: () => onNav('list-settings') },
+        { label: 'Quote PDF', icon: PageIcon, selected: page === 'pdf-settings', onClick: () => onNav('pdf-settings') },
+        { label: 'General', icon: SettingsIcon, onClick: () => onNav('general') },
+      ]}
+    />
+  </Navigation>
+);
+
+// ───── Quotes Dashboard (IndexTable) ─────
+function QuotesDashboard({ onOpenQuote }) {
+  const resourceName = { singular: 'quote', plural: 'quotes' };
+  const { selectedResources, allResourcesSelected, handleSelectionChange } =
+    useIndexResourceState(QUOTES);
+
+  const [tab, setTab] = useState(0);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState('date_desc');
+
+  const tabs = [
+    { id: 'all', content: 'All', filter: () => true },
+    { id: 'open', content: 'Open', filter: q => q.status === 'open' },
+    { id: 'pending', content: 'Pending', filter: q => q.status === 'pending' },
+    { id: 'completed', content: 'Completed', filter: q => q.status === 'completed' },
+    { id: 'expired', content: 'Expired', filter: q => q.status === 'expired' },
+  ].map(t => ({ ...t, badge: String(QUOTES.filter(t.filter).length) }));
+
+  const filtered = useMemo(() => {
+    let r = QUOTES.filter(tabs[tab].filter);
+    if (query) r = r.filter(q =>
+      q.id.toLowerCase().includes(query.toLowerCase()) ||
+      q.title.toLowerCase().includes(query.toLowerCase()) ||
+      q.company.toLowerCase().includes(query.toLowerCase())
+    );
+    return r;
+  }, [tab, query]);
+
+  const rows = filtered.map((q, index) => (
+    <IndexTable.Row id={q.id} key={q.id} position={index} selected={selectedResources.includes(q.id)} onClick={() => onOpenQuote(q)}>
+      <IndexTable.Cell><Mono>#{q.id}</Mono></IndexTable.Cell>
+      <IndexTable.Cell><Text variant="bodyMd" fontWeight="medium">{q.title}</Text></IndexTable.Cell>
+      <IndexTable.Cell>
+        <BlockStack gap="050">
+          <Text variant="bodyMd">{q.company}</Text>
+          <Text variant="bodySm" tone="subdued">{q.customer}</Text>
+        </BlockStack>
+      </IndexTable.Cell>
+      <IndexTable.Cell><Badge tone={STATUS_TONE[q.status]}>{q.status}</Badge></IndexTable.Cell>
+      <IndexTable.Cell><Mono variant="bodySm">{fmtDate(q.created)}</Mono></IndexTable.Cell>
+      <IndexTable.Cell><Mono variant="bodySm">{fmtDate(q.expires)}</Mono></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{q.items}</Mono></Text></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{fmt$(q.total)}</Mono></Text></IndexTable.Cell>
+      <IndexTable.Cell><Text variant="bodySm">{q.owner}</Text></IndexTable.Cell>
+    </IndexTable.Row>
+  ));
+
+  const sortOptions = [
+    { label: 'Newest first', value: 'date_desc' },
+    { label: 'Oldest first', value: 'date_asc' },
+    { label: 'Highest total', value: 'total_desc' },
+    { label: 'Quote # descending', value: 'number_desc' },
+  ];
+
+  return (
+    <Page
+      title="Quotes"
+      subtitle="Review, send, and convert quotes across all B2B companies."
+      titleMetadata={<Badge tone="info">6 active</Badge>}
+      primaryAction={{ content: 'Create quote', icon: PlusIcon }}
+      secondaryActions={[{ content: 'Export', icon: ArrowDownIcon }]}
+    >
+      <Layout>
+        <Layout.Section>
+          <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+            {[
+              { label: 'Total quotes', value: '6', delta: '↑ 12% vs last month', tone: 'success' },
+              { label: 'Open volume', value: fmt$(QUOTES.filter(q=>q.status==='open').reduce((s,q)=>s+q.total,0)), delta: '↑ 8.4%', tone: 'success' },
+              { label: 'Avg. cycle time', value: '4.2d', delta: '↓ 0.6d', tone: 'success' },
+              { label: 'Conversion rate', value: '68%', delta: '↑ 4 pts', tone: 'success' },
+            ].map(s => (
+              <Card key={s.label}>
+                <BlockStack gap="100">
+                  <Text variant="bodySm" tone="subdued">{s.label}</Text>
+                  <Mono variant="headingLg">{s.value}</Mono>
+                  <Text variant="bodySm" tone={s.tone}>{s.delta}</Text>
+                </BlockStack>
+              </Card>
+            ))}
+          </InlineGrid>
+        </Layout.Section>
+
+        <Layout.Section>
+          <Card padding="0">
+            <IndexFilters
+              sortOptions={sortOptions}
+              sortSelected={[sort]}
+              queryValue={query}
+              queryPlaceholder="Search quote number, title, or company"
+              onQueryChange={setQuery}
+              onQueryClear={() => setQuery('')}
+              onSort={(v) => setSort(v[0])}
+              cancelAction={{ onAction: () => {}, disabled: false, loading: false }}
+              tabs={tabs}
+              selected={tab}
+              onSelect={setTab}
+              canCreateNewView
+              onCreateNewView={async () => true}
+              filters={[]}
+              appliedFilters={[]}
+              onClearAll={() => {}}
+              mode="DEFAULT"
+              setMode={() => {}}
+            />
+            <IndexTable
+              condensed={false}
+              resourceName={resourceName}
+              itemCount={filtered.length}
+              selectedItemsCount={allResourcesSelected ? 'All' : selectedResources.length}
+              onSelectionChange={handleSelectionChange}
+              promotedBulkActions={[
+                { content: 'Send', onAction: () => {} },
+                { content: 'Email PDF', onAction: () => {} },
+                { content: 'Archive', onAction: () => {} },
+              ]}
+              bulkActions={[{ content: 'Delete', onAction: () => {} }]}
+              headings={[
+                { title: 'Quote #' },
+                { title: 'Title' },
+                { title: 'Company' },
+                { title: 'Status' },
+                { title: 'Created' },
+                { title: 'Expires' },
+                { title: 'Items', alignment: 'end' },
+                { title: 'Total', alignment: 'end' },
+                { title: 'Owner' },
+              ]}
+            >
+              {rows}
+            </IndexTable>
+          </Card>
+        </Layout.Section>
+      </Layout>
+    </Page>
+  );
+}
+
+// ───── Quote Detail ─────
+function QuoteDetail({ quote, onBack }) {
+  const q = quote || QUOTES[0];
+  const items = [
+    { sku: 'GM-3000-COIL', desc: 'Industrial Cable 12AWG, 1000ft spool', msrp: 489.00, price: 412.50, qty: 12, uom: 'Spool' },
+    { sku: 'GM-PANEL-24C', desc: '24-Circuit Panel, NEMA 3R', msrp: 1284.00, price: 1098.00, qty: 4, uom: 'Ea' },
+    { sku: 'PW-EMT-34', desc: 'Conduit EMT 3/4" × 10ft', msrp: 18.40, price: 14.75, qty: 200, uom: 'Stick' },
+    { sku: 'SE-JB-6X6', desc: 'Junction Box 6×6", weatherproof', msrp: 64.50, price: 52.00, qty: 24, uom: 'Ea' },
+  ];
+  const subtotal = items.reduce((s, l) => s + l.price * l.qty, 0);
+  const shipping = 425;
+  const tax = subtotal * 0.0825;
+  const total = subtotal + shipping + tax;
+
+  const itemRows = items.map((l, i) => (
+    <IndexTable.Row id={l.sku} key={l.sku} position={i}>
+      <IndexTable.Cell><Mono variant="bodySm">{l.sku}</Mono></IndexTable.Cell>
+      <IndexTable.Cell><Text>{l.desc}</Text></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{fmt$(l.msrp)}</Mono></Text></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{fmt$(l.price)}</Mono></Text></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{l.qty}</Mono></Text></IndexTable.Cell>
+      <IndexTable.Cell><Text>{l.uom}</Text></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{fmt$(l.price * l.qty)}</Mono></Text></IndexTable.Cell>
+    </IndexTable.Row>
+  ));
+
+  return (
+    <Page
+      backAction={{ content: 'Quotes', onAction: onBack }}
+      title={`#${q.id}`}
+      titleMetadata={<InlineStack gap="200"><Badge tone={STATUS_TONE[q.status]}>{q.status}</Badge></InlineStack>}
+      subtitle={q.title}
+      primaryAction={{ content: 'Send to buyer' }}
+      secondaryActions={[
+        { content: 'Email quote', icon: EmailIcon },
+        { content: 'Download PDF', icon: ArrowDownIcon },
+        { content: 'Duplicate', icon: DuplicateIcon },
+      ]}
+    >
+      <Layout>
+        <Layout.Section>
+          <Card padding="0">
+            <Box padding="400" borderBlockEndWidth="025" borderColor="border">
+              <InlineStack align="space-between" blockAlign="center">
+                <BlockStack gap="050">
+                  <Text variant="headingSm">Line items</Text>
+                  <Text variant="bodySm" tone="subdued">{items.length} items · {items.reduce((s,l)=>s+l.qty,0)} units</Text>
+                </BlockStack>
+                <Button icon={EditIcon}>Edit items</Button>
+              </InlineStack>
+            </Box>
+            <IndexTable
+              resourceName={{ singular: 'item', plural: 'items' }}
+              itemCount={items.length}
+              selectable={false}
+              headings={[
+                { title: 'SKU' },
+                { title: 'Description' },
+                { title: 'MSRP', alignment: 'end' },
+                { title: 'Your price', alignment: 'end' },
+                { title: 'Qty', alignment: 'end' },
+                { title: 'UOM' },
+                { title: 'Ext. price', alignment: 'end' },
+              ]}
+            >
+              {itemRows}
+            </IndexTable>
+            <Box padding="400">
+              <InlineStack align="end">
+                <Box minWidth="280px">
+                  <BlockStack gap="100">
+                    <InlineStack align="space-between"><Text tone="subdued">Subtotal</Text><Mono>{fmt$(subtotal)}</Mono></InlineStack>
+                    <InlineStack align="space-between"><Text tone="subdued">Estimated shipping</Text><Mono>{fmt$(shipping)}</Mono></InlineStack>
+                    <InlineStack align="space-between"><Text tone="subdued">Tax (8.25%)</Text><Mono>{fmt$(tax)}</Mono></InlineStack>
+                    <Divider />
+                    <InlineStack align="space-between">
+                      <Text fontWeight="semibold">Total</Text>
+                      <Mono variant="headingMd">{fmt$(total)}</Mono>
+                    </InlineStack>
+                  </BlockStack>
+                </Box>
+              </InlineStack>
+            </Box>
+          </Card>
+
+          <Box paddingBlockStart="400">
+            <Card>
+              <BlockStack gap="300">
+                <Text variant="headingSm">Activity</Text>
+                <BlockStack gap="200">
+                  {[
+                    { when: '2 hours ago', body: 'Sent reminder email to James Rodriguez', who: 'Morgan Ellis' },
+                    { when: 'Yesterday, 4:12 PM', body: 'Updated GM-PANEL-24C qty from 2 → 4', who: 'Morgan Ellis' },
+                    { when: '3 days ago', body: 'Approved by VP Operations', who: 'System' },
+                    { when: '4 days ago', body: 'Quote sent to buyer', who: 'Morgan Ellis' },
+                    { when: '5 days ago', body: 'Quote created from cart', who: 'James Rodriguez' },
+                  ].map((e, i) => (
+                    <Box key={i} paddingBlock="200" borderBlockStartWidth={i ? '025' : '0'} borderColor="border">
+                      <Text>{e.body}</Text>
+                      <Text variant="bodySm" tone="subdued">{e.when} · {e.who}</Text>
+                    </Box>
+                  ))}
+                </BlockStack>
+              </BlockStack>
+            </Card>
+          </Box>
+        </Layout.Section>
+
+        <Layout.Section variant="oneThird">
+          <BlockStack gap="400">
+            <Card>
+              <BlockStack gap="200">
+                <Text variant="headingSm">Buyer</Text>
+                <Text fontWeight="medium">{q.customer}</Text>
+                <Text tone="subdued">{q.company}</Text>
+                <Link url="#">j.rodriguez@atlasind.com</Link>
+                <Text tone="subdued"><Mono variant="bodySm">+1 (713) 555-0188</Mono></Text>
+              </BlockStack>
+            </Card>
+            <Card>
+              <BlockStack gap="200">
+                <Text variant="headingSm">Quote details</Text>
+                <InlineStack align="space-between"><Text tone="subdued">Quote number</Text><Mono>#{q.id}</Mono></InlineStack>
+                <InlineStack align="space-between"><Text tone="subdued">Created</Text><Mono variant="bodySm">{fmtDate(q.created)}</Mono></InlineStack>
+                <InlineStack align="space-between"><Text tone="subdued">Expires</Text><Mono variant="bodySm">{fmtDate(q.expires)}</Mono></InlineStack>
+                <InlineStack align="space-between"><Text tone="subdued">Payment terms</Text><Text>Net 45</Text></InlineStack>
+                <InlineStack align="space-between"><Text tone="subdued">Owner</Text><Text>{q.owner}</Text></InlineStack>
+              </BlockStack>
+            </Card>
+            <Card>
+              <BlockStack gap="200">
+                <Text variant="headingSm">Approvals</Text>
+                <InlineStack align="space-between" blockAlign="center"><Text>VP Operations</Text><Badge tone="success">Approved</Badge></InlineStack>
+                <InlineStack align="space-between" blockAlign="center"><Text>Accounting</Text><Badge tone="success">Approved</Badge></InlineStack>
+              </BlockStack>
+            </Card>
+          </BlockStack>
+        </Layout.Section>
+      </Layout>
+    </Page>
+  );
+}
+
+// ───── List Settings ─────
+const DEFAULT_LIST = {
+  page_title: 'Your Saved Quotes',
+  page_title_size: 'xl',
+  show_subtitle: true,
+  subtitle_text: 'Review and manage your saved quotes.',
+  show_create_quote_button: true,
+  create_quote_button_label: 'Request a quote',
+  columns: [
+    { key: 'number', visible: true, label: 'Quote Number' },
+    { key: 'title', visible: true, label: 'Quote Title' },
+    { key: 'date_created', visible: true, label: 'Date Created' },
+    { key: 'status', visible: true, label: 'Status' },
+    { key: 'total', visible: true, label: 'Total' },
+    { key: 'item_count', visible: false, label: 'Items' },
+  ],
+  header_bg: '#5B6770',
+  header_text: '#FFFFFF',
+  row_density: 'comfortable',
+  zebra_striping: false,
+  border_radius: 'md',
+  show_search: true,
+  show_status_filter: true,
+  show_sort_dropdown: true,
+  pagination_style: 'numbered',
+};
+const TITLE_PX = { lg: '24px', xl: '32px', '2xl': '40px', '3xl': '48px' };
+const DENS_PX = { compact: '8px', comfortable: '14px', spacious: '20px' };
+const RAD_PX = { none: '0', sm: '4px', md: '8px', lg: '14px' };
+
+function StorefrontPreview({ s }) {
+  const cols = s.columns.filter(c => c.visible);
+  return (
+    <div className="sf" style={{
+      '--sf-title-size': TITLE_PX[s.page_title_size],
+      '--sf-header-bg': s.header_bg,
+      '--sf-header-text': s.header_text,
+      '--sf-density': DENS_PX[s.row_density],
+      '--sf-radius': RAD_PX[s.border_radius],
+    }}>
+      <div className="sf-page">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+          <div>
+            <h1 className="sf-title">{s.page_title}</h1>
+            {s.show_subtitle && <p className="sf-subtitle">{s.subtitle_text}</p>}
+          </div>
+          {s.show_create_quote_button && <a href="#" className="sf-cta">{s.create_quote_button_label}</a>}
+        </div>
+        {(s.show_search || s.show_status_filter || s.show_sort_dropdown) && (
+          <div className="sf-toolbar">
+            {s.show_search && <input className="sf-search" placeholder="Search quotes…"/>}
+            {s.show_status_filter && <select className="sf-select"><option>All statuses</option><option>Open</option><option>Completed</option></select>}
+            {s.show_sort_dropdown && <select className="sf-select"><option>Newest first</option><option>Oldest first</option></select>}
+          </div>
+        )}
+        <table className={`sf-table ${s.zebra_striping ? 'sf-zebra' : ''}`}>
+          <thead><tr>{cols.map(c => <th key={c.key}>{c.label}</th>)}<th style={{ width: 50 }}></th></tr></thead>
+          <tbody>
+            {SF_QUOTES.map(q => (
+              <tr key={q.id}>
+                {cols.map(c => {
+                  if (c.key === 'number') return <td key="n" style={monoStyle}>#{q.id}</td>;
+                  if (c.key === 'title') return <td key="t">{q.title}</td>;
+                  if (c.key === 'date_created') return <td key="d" style={monoStyle}>{q.date}</td>;
+                  if (c.key === 'status') return <td key="s"><span className={`sf-status sf-status--${q.status}`}>{q.status}</span></td>;
+                  if (c.key === 'total') return <td key="$" style={{ ...monoStyle, textAlign: 'right' }}>{fmt$(q.total)}</td>;
+                  if (c.key === 'item_count') return <td key="i" style={{ textAlign: 'right' }}>{q.items}</td>;
+                  return <td key={c.key}>—</td>;
+                })}
+                <td style={{ textAlign: 'right' }}><span style={{ cursor: 'pointer', color: '#555' }}>⋯</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {s.pagination_style === 'numbered' && (
+          <div className="sf-pagination"><span className="pn">‹</span><span className="pn active">1</span><span className="pn">2</span><span className="pn">3</span><span className="pn">›</span></div>
+        )}
+        {s.pagination_style === 'cursor' && (
+          <div className="sf-pagination"><span className="pn">‹ Previous</span><span className="pn">Next ›</span></div>
+        )}
+        {s.pagination_style === 'load_more' && (
+          <div style={{ textAlign: 'center', marginTop: 20 }}><a href="#" className="sf-cta" style={{ background: '#fff', color: '#1a1a1a', border: '1px solid #d4d4d8' }}>Load more</a></div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ListSettingsBody() {
+  const [s, setS] = useState(DEFAULT_LIST);
+  const [tab, setTab] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState('inline');
+  const upd = (p) => { setS(prev => ({ ...prev, ...p })); setDirty(true); };
+  const updCol = (key, p) => { setS(prev => ({ ...prev, columns: prev.columns.map(c => c.key === key ? { ...c, ...p } : c) })); setDirty(true); };
+  const moveCol = (idx, dir) => {
+    const next = [...s.columns]; const sw = idx + dir;
+    if (sw < 0 || sw >= next.length) return;
+    [next[idx], next[sw]] = [next[sw], next[idx]];
+    setS(p => ({ ...p, columns: next })); setDirty(true);
+  };
+
+  const tabs = [
+    { id: 'page', content: 'Page' },
+    { id: 'columns', content: 'Columns' },
+    { id: 'style', content: 'Style' },
+    { id: 'filters', content: 'Filters & sort' },
+    { id: 'empty', content: 'Empty state' },
+  ];
+
+  return (
+    <BlockStack gap="400">
+      <InlineStack align="space-between" blockAlign="center">
+        <Text variant="bodySm" tone="subdued">Storefront block configuration</Text>
+        <InlineStack gap="200" blockAlign="center">
+          <Text variant="bodySm" tone="subdued">Preview</Text>
+          <ButtonGroup variant="segmented">
+            <Button pressed={previewMode === 'inline'} onClick={() => setPreviewMode('inline')}>Inline</Button>
+            <Button pressed={previewMode === 'modal'} onClick={() => setPreviewMode('modal')}>Modal</Button>
+          </ButtonGroup>
+          {previewMode === 'modal' && <Button icon={ViewIcon} onClick={() => setPreviewOpen(true)}>Open</Button>}
+        </InlineStack>
+      </InlineStack>
+      <Banner tone="info" title="Theme app extension">
+        <p>Drop the <span style={monoStyle}>Quote list</span> app block onto any storefront page from the theme editor. Buyers see only their own quotes; admins see their location's quotes.</p>
+      </Banner>
+      <InlineGrid columns={previewMode === 'inline' ? { xs: 1, lg: '1fr 1fr' } : 1} gap="400">
+        <Card padding="0">
+          <Tabs tabs={tabs} selected={tab} onSelect={setTab}>
+              <Box padding="400">
+                {tab === 0 && (
+                  <FormLayout>
+                    <TextField label="Page title" value={s.page_title} onChange={(v) => upd({ page_title: v })} autoComplete="off" helpText="Shown as the H1 above the list." />
+                    <Select label="Title size" options={[
+                      { label: 'Large (24px)', value: 'lg' },
+                      { label: 'Extra large (32px)', value: 'xl' },
+                      { label: '2x large (40px)', value: '2xl' },
+                      { label: '3x large (48px)', value: '3xl' },
+                    ]} value={s.page_title_size} onChange={(v) => upd({ page_title_size: v })} />
+                    <Checkbox label="Show subtitle" checked={s.show_subtitle} onChange={(v) => upd({ show_subtitle: v })} />
+                    {s.show_subtitle && <TextField label="Subtitle text" labelHidden value={s.subtitle_text} onChange={(v) => upd({ subtitle_text: v })} autoComplete="off" />}
+                    <Checkbox label="Show create-quote button" helpText="A primary CTA in the header." checked={s.show_create_quote_button} onChange={(v) => upd({ show_create_quote_button: v })} />
+                    {s.show_create_quote_button && <TextField label="Button label" value={s.create_quote_button_label} onChange={(v) => upd({ create_quote_button_label: v })} autoComplete="off" />}
+                  </FormLayout>
+                )}
+                {tab === 1 && (
+                  <BlockStack gap="200">
+                    <Text variant="bodySm" tone="subdued">Toggle visibility, edit labels, reorder. Mobile users always see Number, Title, and Date.</Text>
+                    {s.columns.map((c, i) => (
+                      <Box key={c.key} padding="300" borderWidth="025" borderColor="border" borderRadius="200" background="bg-surface">
+                        <InlineStack gap="300" blockAlign="center" wrap={false}>
+                          <Checkbox label="" labelHidden checked={c.visible} onChange={(v) => updCol(c.key, { visible: v })} />
+                          <Box minWidth="200px"><TextField label="" labelHidden value={c.label} onChange={(v) => updCol(c.key, { label: v })} autoComplete="off"/></Box>
+                          <Box minWidth="100px"><Text variant="bodySm" tone="subdued"><span style={monoStyle}>{c.key}</span></Text></Box>
+                          <ButtonGroup variant="segmented">
+                            <Button onClick={() => moveCol(i, -1)} disabled={i === 0} size="micro">↑</Button>
+                            <Button onClick={() => moveCol(i, 1)} disabled={i === s.columns.length - 1} size="micro">↓</Button>
+                          </ButtonGroup>
+                        </InlineStack>
+                      </Box>
+                    ))}
+                  </BlockStack>
+                )}
+                {tab === 2 && (
+                  <FormLayout>
+                    <FormLayout.Group>
+                      <TextField label="Header background" value={s.header_bg} onChange={(v) => upd({ header_bg: v })} autoComplete="off" prefix={<Box background="bg-fill-brand" minWidth="14px" minHeight="14px" borderRadius="100"><div style={{ width: 14, height: 14, background: s.header_bg, borderRadius: 4 }}/></Box>}/>
+                      <TextField label="Header text" value={s.header_text} onChange={(v) => upd({ header_text: v })} autoComplete="off" prefix={<div style={{ width: 14, height: 14, background: s.header_text, borderRadius: 4, border: '1px solid #ccc' }}/>}/>
+                    </FormLayout.Group>
+                    <Select label="Row density" options={[
+                      { label: 'Compact', value: 'compact' },
+                      { label: 'Comfortable', value: 'comfortable' },
+                      { label: 'Spacious', value: 'spacious' },
+                    ]} value={s.row_density} onChange={(v) => upd({ row_density: v })}/>
+                    <Select label="Border radius" options={[
+                      { label: 'None', value: 'none' },
+                      { label: 'Small', value: 'sm' },
+                      { label: 'Medium', value: 'md' },
+                      { label: 'Large', value: 'lg' },
+                    ]} value={s.border_radius} onChange={(v) => upd({ border_radius: v })}/>
+                    <Checkbox label="Zebra striping" helpText="Alternate row backgrounds for readability." checked={s.zebra_striping} onChange={(v) => upd({ zebra_striping: v })}/>
+                  </FormLayout>
+                )}
+                {tab === 3 && (
+                  <FormLayout>
+                    <Checkbox label="Show search" helpText="Searches quote number and title." checked={s.show_search} onChange={(v) => upd({ show_search: v })}/>
+                    <Checkbox label="Show status filter" checked={s.show_status_filter} onChange={(v) => upd({ show_status_filter: v })}/>
+                    <Checkbox label="Show sort dropdown" checked={s.show_sort_dropdown} onChange={(v) => upd({ show_sort_dropdown: v })}/>
+                    <Select label="Pagination style" options={[
+                      { label: 'Previous / Next', value: 'cursor' },
+                      { label: 'Numbered pages', value: 'numbered' },
+                      { label: 'Load more button', value: 'load_more' },
+                    ]} value={s.pagination_style} onChange={(v) => upd({ pagination_style: v })}/>
+                  </FormLayout>
+                )}
+                {tab === 4 && (
+                  <FormLayout>
+                    <TextField label="Empty state title" defaultValue="No saved quotes yet" autoComplete="off"/>
+                    <TextField label="Empty state description" multiline={2} defaultValue="When you save a quote, you'll see it here." autoComplete="off"/>
+                    <Checkbox label="Show CTA button" checked onChange={() => {}}/>
+                    <TextField label="CTA label" defaultValue="Browse products" autoComplete="off"/>
+                  </FormLayout>
+                )}
+              </Box>
+        </Tabs>
+        </Card>
+        {previewMode === 'inline' && (
+          <div className="preview-shell">
+            <div className="preview-toolbar">
+              <span>Live preview</span>
+              <div className="url-pill">atlasind.myshopify.com/pages/my-quotes</div>
+            </div>
+            <div className="preview-stage"><StorefrontPreview s={s}/></div>
+          </div>
+        )}
+      </InlineGrid>
+      {dirty && (
+        <Banner tone="warning" title="Unsaved changes" onDismiss={() => setDirty(false)}>
+          <InlineStack gap="200">
+            <Button variant="primary" onClick={() => setDirty(false)}>Save changes</Button>
+            <Button onClick={() => { setS(DEFAULT_LIST); setDirty(false); }}>Discard</Button>
+          </InlineStack>
+        </Banner>
+      )}
+      <Modal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="Storefront preview"
+        size="large"
+        primaryAction={{ content: 'Close', onAction: () => setPreviewOpen(false) }}
+      >
+        <Modal.Section>
+          <Box padding="0">
+            <div className="preview-shell">
+              <div className="preview-toolbar">
+                <span>Live preview</span>
+                <div className="url-pill">atlasind.myshopify.com/pages/my-quotes</div>
+              </div>
+              <div className="preview-stage"><StorefrontPreview s={s}/></div>
+            </div>
+          </Box>
+        </Modal.Section>
+      </Modal>
+    </BlockStack>
+  );
+}
+
+// ───── PDF Settings ─────
+const DEFAULT_PDF = {
+  document_title: 'Quote',
+  document_title_color: '#1F3B4D',
+  primary_color: '#5B6770',
+  accent_color: '#9E1B32',
+  font_family: 'Inter',
+  page_size: 'Letter',
+  watermark_text: '',
+  show_quote_number: true,
+  quote_number_prefix: 'D',
+  show_quote_date: true,
+  show_expiry_date: true,
+  default_expiry_days: 90,
+  date_format: 'MMM D, YYYY',
+  sender_name: 'Atlas Industries',
+  sender_address: '4521 Industrial Blvd\nHouston, TX 77002',
+  sender_phone: '+1 (713) 555-0188',
+  sender_email: 'sales@atlasind.com',
+  show_phone: true,
+  show_email: true,
+  show_bill_to: true,
+  show_ship_to: true,
+  show_shipping_method: true,
+  show_msrp: true,
+  show_uom: true,
+  show_subtotal: true,
+  show_estimated_shipping: true,
+  estimated_shipping_note: 'Shipping costs are subject to change at checkout',
+  show_tax: false,
+  total_label: 'Total',
+  footer_text: 'Quote subject to terms at atlasind.com/terms. Net 45 unless otherwise noted.',
+  show_page_numbers: true,
+};
+
+function PdfPreview({ s, scale = 0.78 }) {
+  const items = [
+    { sku: 'GM-3000-COIL', desc: 'Industrial Cable 12AWG', msrp: 489.00, price: 412.50, qty: 12, uom: 'Spool' },
+    { sku: 'GM-PANEL-24C', desc: '24-Circuit Panel NEMA 3R', msrp: 1284.00, price: 1098.00, qty: 4, uom: 'Ea' },
+    { sku: 'PW-EMT-34', desc: 'Conduit EMT 3/4" × 10ft', msrp: 18.40, price: 14.75, qty: 200, uom: 'Stick' },
+    { sku: 'SE-JB-6X6', desc: 'Junction Box 6×6"', msrp: 64.50, price: 52.00, qty: 24, uom: 'Ea' },
+  ];
+  const subtotal = items.reduce((t, l) => t + l.price * l.qty, 0);
+  const shipping = 425;
+  const total = subtotal + shipping;
+  return (
+    <div className={`pdf-page ${s.page_size === 'A4' ? 'pdf-a4' : ''}`} style={{
+      '--pdf-accent': s.accent_color,
+      '--pdf-title-color': s.document_title_color,
+      '--pdf-table-header': s.primary_color,
+      fontFamily: s.font_family,
+      transform: `scale(${scale})`,
+    }}>
+      {s.watermark_text && <div className="pdf-watermark">{s.watermark_text}</div>}
+      <div className="pdf-header">
+        <h1 className="pdf-title">{s.document_title}</h1>
+        <div className="pdf-logo">{s.sender_name.toUpperCase()}</div>
+      </div>
+      <div className="pdf-meta-row">
+        <div className="pdf-sender">
+          <div className="biz">{s.sender_name}</div>
+          {s.sender_address.split('\n').map((l, i) => <div key={i}>{l}</div>)}
+          {s.show_phone && <div>Direct: <span style={monoStyle}>{s.sender_phone}</span></div>}
+          {s.show_email && <div>{s.sender_email}</div>}
+        </div>
+        <div className="pdf-quote-meta">
+          {s.show_quote_number && <div className="row"><span className="label">Quote #</span><span className="value">{s.quote_number_prefix}2895</span></div>}
+          {s.show_quote_date && <div className="row"><span className="label">Date</span><span className="value">Apr 22, 2026</span></div>}
+          {s.show_expiry_date && <div className="row"><span className="label">Expires</span><span className="value">Jul 21, 2026</span></div>}
+        </div>
+      </div>
+      <div className="pdf-addr-row">
+        {s.show_bill_to && <div><div className="label">Bill To</div><div>James Rodriguez</div><div>Atlas Industries</div><div>4521 Industrial Blvd</div><div>Houston, TX 77002</div></div>}
+        {s.show_ship_to && <div><div className="label">Ship To</div><div>Atlas — Yard 4</div><div>2200 Buffalo Bayou</div><div>Houston, TX 77019</div></div>}
+        {s.show_shipping_method && <div><div className="label">Shipping Method</div><div>Per Order: UPS, Freight</div></div>}
+      </div>
+      <table className="pdf-table">
+        <thead><tr>
+          <th>SKU</th><th>Description</th>
+          {s.show_msrp && <th className="num">MSRP</th>}
+          <th className="num">Your Price</th>
+          <th className="num">Qty</th>
+          {s.show_uom && <th>UOM</th>}
+          <th className="num">Ext.</th>
+        </tr></thead>
+        <tbody>{items.map(l => (
+          <tr key={l.sku}>
+            <td style={monoStyle}>{l.sku}</td>
+            <td>{l.desc}</td>
+            {s.show_msrp && <td className="num">{fmt$(l.msrp)}</td>}
+            <td className="num">{fmt$(l.price)}</td>
+            <td className="num">{l.qty}</td>
+            {s.show_uom && <td>{l.uom}</td>}
+            <td className="num">{fmt$(l.price * l.qty)}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+      <div className="pdf-totals">
+        {s.show_subtotal && <div className="row"><span>Subtotal</span><span className="value">{fmt$(subtotal)}</span></div>}
+        {s.show_estimated_shipping && <div className="row"><span>Estimated Shipping</span><span className="value">{fmt$(shipping)}</span></div>}
+        {s.show_estimated_shipping && s.estimated_shipping_note && <div className="row note">{s.estimated_shipping_note}</div>}
+        {s.show_tax && <div className="row"><span>Tax</span><span className="value">$0.00</span></div>}
+        <div className="row total"><span>{s.total_label}</span><span className="value">{fmt$(total)}</span></div>
+      </div>
+      <div className="pdf-footer">
+        <div style={{ flex: 1, paddingRight: 12 }}>{s.footer_text}</div>
+        {s.show_page_numbers && <div>Page 1 of 1</div>}
+      </div>
+    </div>
+  );
+}
+
+function PdfSettingsBody() {
+  const [s, setS] = useState(DEFAULT_PDF);
+  const [tab, setTab] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState('inline');
+  const upd = (p) => { setS(prev => ({ ...prev, ...p })); setDirty(true); };
+  const tabs = [
+    { id: 'branding', content: 'Branding' },
+    { id: 'header', content: 'Header & meta' },
+    { id: 'sender', content: 'Sender' },
+    { id: 'layout', content: 'Layout' },
+    { id: 'totals', content: 'Totals' },
+    { id: 'footer', content: 'Footer' },
+    { id: 'email', content: 'Email' },
+  ];
+
+  return (
+    <BlockStack gap="400">
+      <InlineStack align="space-between" blockAlign="center">
+        <Text variant="bodySm" tone="subdued">PDF template configuration</Text>
+        <InlineStack gap="200" blockAlign="center">
+          <Text variant="bodySm" tone="subdued">Preview</Text>
+          <ButtonGroup variant="segmented">
+            <Button pressed={previewMode === 'inline'} onClick={() => setPreviewMode('inline')}>Inline</Button>
+            <Button pressed={previewMode === 'modal'} onClick={() => setPreviewMode('modal')}>Modal</Button>
+          </ButtonGroup>
+          {previewMode === 'modal' && <Button icon={ViewIcon} onClick={() => setPreviewOpen(true)}>Open</Button>}
+        </InlineStack>
+      </InlineStack>
+      <InlineGrid columns={previewMode === 'inline' ? { xs: 1, lg: '1fr 1fr' } : 1} gap="400">
+        <Card padding="0">
+          <Tabs tabs={tabs} selected={tab} onSelect={setTab}>
+              <Box padding="400">
+                {tab === 0 && (
+                  <FormLayout>
+                    <Box padding="300" borderWidth="025" borderColor="border" borderRadius="200" borderStyle="dashed">
+                      <InlineStack gap="300" blockAlign="center">
+                        <Box minWidth="60px" minHeight="60px" background="bg-fill-brand" borderRadius="100">
+                          <div style={{ width: 60, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><Text variant="headingLg" as="span">AI</Text></div>
+                        </Box>
+                        <BlockStack gap="050">
+                          <Text fontWeight="medium">atlas-logo.svg</Text>
+                          <Text variant="bodySm" tone="subdued">600 × 200, PNG/JPG/SVG</Text>
+                        </BlockStack>
+                        <Box><Button>Replace</Button></Box>
+                      </InlineStack>
+                    </Box>
+                    <FormLayout.Group>
+                      <TextField label="Primary color" helpText="Table header & total label." value={s.primary_color} onChange={(v) => upd({ primary_color: v })} autoComplete="off" prefix={<div style={{ width: 14, height: 14, background: s.primary_color, borderRadius: 4 }}/>}/>
+                      <TextField label="Accent color" helpText="Header underline." value={s.accent_color} onChange={(v) => upd({ accent_color: v })} autoComplete="off" prefix={<div style={{ width: 14, height: 14, background: s.accent_color, borderRadius: 4 }}/>}/>
+                    </FormLayout.Group>
+                    <FormLayout.Group>
+                      <Select label="Font family" options={['Inter','Roboto','Lato','Helvetica','Times'].map(v => ({ label: v, value: v }))} value={s.font_family} onChange={(v) => upd({ font_family: v })}/>
+                      <Select label="Page size" options={[
+                        { label: 'Letter (8.5 × 11 in)', value: 'Letter' },
+                        { label: 'A4 (210 × 297 mm)', value: 'A4' },
+                        { label: 'Legal (8.5 × 14 in)', value: 'Legal' },
+                      ]} value={s.page_size} onChange={(v) => upd({ page_size: v })}/>
+                    </FormLayout.Group>
+                    <TextField label="Watermark text" helpText="Optional. e.g. DRAFT, COPY, INTERNAL ONLY." value={s.watermark_text} onChange={(v) => upd({ watermark_text: v })} autoComplete="off" placeholder="(none)"/>
+                  </FormLayout>
+                )}
+                {tab === 1 && (
+                  <FormLayout>
+                    <TextField label="Document title" helpText="e.g. Quote, Quotation, Estimate, Proposal." value={s.document_title} onChange={(v) => upd({ document_title: v })} autoComplete="off"/>
+                    <TextField label="Title color" value={s.document_title_color} onChange={(v) => upd({ document_title_color: v })} autoComplete="off" prefix={<div style={{ width: 14, height: 14, background: s.document_title_color, borderRadius: 4 }}/>}/>
+                    <Checkbox label="Show quote number" checked={s.show_quote_number} onChange={(v) => upd({ show_quote_number: v })}/>
+                    {s.show_quote_number && <TextField label="Quote number prefix" helpText="Becomes #D2895 etc." value={s.quote_number_prefix} onChange={(v) => upd({ quote_number_prefix: v })} autoComplete="off"/>}
+                    <Checkbox label="Show quote date" checked={s.show_quote_date} onChange={(v) => upd({ show_quote_date: v })}/>
+                    <Checkbox label="Show expiry date" checked={s.show_expiry_date} onChange={(v) => upd({ show_expiry_date: v })}/>
+                    <FormLayout.Group>
+                      <TextField label="Default expiry (days)" type="number" value={String(s.default_expiry_days)} onChange={(v) => upd({ default_expiry_days: Number(v) })} autoComplete="off"/>
+                      <Select label="Date format" options={[
+                        { label: '04/22/26', value: 'MM/DD/YY' },
+                        { label: '22/04/26', value: 'DD/MM/YY' },
+                        { label: '2026-04-22', value: 'YYYY-MM-DD' },
+                        { label: 'Apr 22, 2026', value: 'MMM D, YYYY' },
+                      ]} value={s.date_format} onChange={(v) => upd({ date_format: v })}/>
+                    </FormLayout.Group>
+                  </FormLayout>
+                )}
+                {tab === 2 && (
+                  <FormLayout>
+                    <TextField label="Business name" value={s.sender_name} onChange={(v) => upd({ sender_name: v })} autoComplete="off"/>
+                    <TextField label="Address" multiline={3} value={s.sender_address} onChange={(v) => upd({ sender_address: v })} autoComplete="off"/>
+                    <FormLayout.Group>
+                      <TextField label="Phone" value={s.sender_phone} onChange={(v) => upd({ sender_phone: v })} autoComplete="off"/>
+                      <TextField label="Email" value={s.sender_email} onChange={(v) => upd({ sender_email: v })} autoComplete="off"/>
+                    </FormLayout.Group>
+                    <Checkbox label="Show phone on PDF" checked={s.show_phone} onChange={(v) => upd({ show_phone: v })}/>
+                    <Checkbox label="Show email on PDF" checked={s.show_email} onChange={(v) => upd({ show_email: v })}/>
+                  </FormLayout>
+                )}
+                {tab === 3 && (
+                  <FormLayout>
+                    <Text variant="headingSm" as="h3">Address row</Text>
+                    <Checkbox label="Show Bill To" checked={s.show_bill_to} onChange={(v) => upd({ show_bill_to: v })}/>
+                    <Checkbox label="Show Ship To" checked={s.show_ship_to} onChange={(v) => upd({ show_ship_to: v })}/>
+                    <Checkbox label="Show shipping method" checked={s.show_shipping_method} onChange={(v) => upd({ show_shipping_method: v })}/>
+                    <Text variant="headingSm" as="h3">Line items</Text>
+                    <Checkbox label="Show MSRP column" checked={s.show_msrp} onChange={(v) => upd({ show_msrp: v })}/>
+                    <Checkbox label="Show UOM column" helpText="Unit of measure (Ea, Spool, Stick)." checked={s.show_uom} onChange={(v) => upd({ show_uom: v })}/>
+                  </FormLayout>
+                )}
+                {tab === 4 && (
+                  <FormLayout>
+                    <Checkbox label="Show subtotal" checked={s.show_subtotal} onChange={(v) => upd({ show_subtotal: v })}/>
+                    <Checkbox label="Show estimated shipping" checked={s.show_estimated_shipping} onChange={(v) => upd({ show_estimated_shipping: v })}/>
+                    {s.show_estimated_shipping && <TextField label="Shipping note" value={s.estimated_shipping_note} onChange={(v) => upd({ estimated_shipping_note: v })} autoComplete="off"/>}
+                    <Checkbox label="Show tax line" checked={s.show_tax} onChange={(v) => upd({ show_tax: v })}/>
+                    <TextField label="Total label" value={s.total_label} onChange={(v) => upd({ total_label: v })} autoComplete="off"/>
+                  </FormLayout>
+                )}
+                {tab === 5 && (
+                  <FormLayout>
+                    <TextField label="Footer text" multiline={4} helpText="Terms, return policy, legal." value={s.footer_text} onChange={(v) => upd({ footer_text: v })} autoComplete="off"/>
+                    <Checkbox label="Show page numbers" helpText="Page 1 of N format." checked={s.show_page_numbers} onChange={(v) => upd({ show_page_numbers: v })}/>
+                  </FormLayout>
+                )}
+                {tab === 6 && (
+                  <FormLayout>
+                    <TextField label="Subject template" defaultValue="Your Quote {{quote_number}} from {{shop_name}}" autoComplete="off" helpText="Variables: {{quote_number}}, {{shop_name}}, {{customer_name}}, {{total}}."/>
+                    <TextField label="Body template" multiline={6} defaultValue={"Hi {{customer_name}},\n\nYour quote is ready. Total: {{total}}. Open it any time at {{quote_url}}.\n\nThanks,\n{{shop_name}}"} autoComplete="off"/>
+                    <FormLayout.Group>
+                      <TextField label="From name" defaultValue="Atlas Industries Sales" autoComplete="off"/>
+                      <TextField label="Reply-to" defaultValue="sales@atlasind.com" autoComplete="off"/>
+                    </FormLayout.Group>
+                    <Checkbox label="BCC merchant on every quote email" checked onChange={() => {}}/>
+                    <Checkbox label="Attach PDF to email" checked onChange={() => {}}/>
+                    <Checkbox label="Auto-email on quote create" checked={false} onChange={() => {}}/>
+                  </FormLayout>
+                )}
+              </Box>
+            </Tabs>
+          </Card>
+        {previewMode === 'inline' && (
+          <div className="preview-shell">
+            <div className="preview-toolbar">
+              <span>Live preview</span>
+              <div className="url-pill">quote-D2895.pdf · {s.page_size}</div>
+            </div>
+            <div className="preview-stage preview-stage--pdf"><PdfPreview s={s}/></div>
+          </div>
+        )}
+      </InlineGrid>
+      {dirty && (
+        <Banner tone="warning" title="Unsaved changes" onDismiss={() => setDirty(false)}>
+          <InlineStack gap="200">
+            <Button variant="primary" onClick={() => setDirty(false)}>Save changes</Button>
+            <Button onClick={() => { setS(DEFAULT_PDF); setDirty(false); }}>Discard</Button>
+          </InlineStack>
+        </Banner>
+      )}
+      <Modal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title="PDF preview"
+        size="large"
+        primaryAction={{ content: 'Close', onAction: () => setPreviewOpen(false) }}
+      >
+        <Modal.Section>
+          <Box padding="0">
+            <div className="preview-shell">
+              <div className="preview-toolbar">
+                <span>Live preview</span>
+                <div className="url-pill">quote-D2895.pdf · {s.page_size}</div>
+              </div>
+              <div className="preview-stage preview-stage--pdf"><PdfPreview s={s}/></div>
+            </div>
+          </Box>
+        </Modal.Section>
+      </Modal>
+    </BlockStack>
+  );
+}
+
+// ───── Combined Quote Settings (collapsible cards: General / List / PDF) ─────
+function CollapsibleCard({ id, title, description, defaultOpen, children }) {
+  const [open, setOpen] = useState(Boolean(defaultOpen));
+  return (
+    <Card padding="0">
+      <Box padding="400">
+        <button
+          type="button"
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+          aria-controls={`collapsible-${id}`}
+          style={{ background: 'transparent', border: 0, padding: 0, margin: 0, width: '100%', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}
+        >
+          <BlockStack gap="050">
+            <Text variant="headingMd" as="h2">{title}</Text>
+            {description && <Text variant="bodySm" tone="subdued">{description}</Text>}
+          </BlockStack>
+          <Icon source={open ? ChevronDownIcon : ChevronRightIcon} tone="subdued" />
+        </button>
+      </Box>
+      <Collapsible id={`collapsible-${id}`} open={open} transition={{ duration: '200ms', timingFunction: 'ease-in-out' }} expandOnPrint>
+        <Box paddingInline="400" paddingBlockEnd="400">
+          <Divider />
+          <Box paddingBlockStart="400">{children}</Box>
+        </Box>
+      </Collapsible>
+    </Card>
+  );
+}
+
+function QuoteSettingsPage() {
+  // General
+  const [expiry, setExpiry] = useState('30');
+  const [prefix, setPrefix] = useState('QUO-');
+  const [nextNum, setNextNum] = useState('148');
+  const [dirty, setDirty] = useState(false);
+  const markDirty = () => setDirty(true);
+
+  return (
+    <Page
+      title="Settings"
+      subtitle="Configure quote behavior, the storefront list, and the PDF template."
+      primaryAction={dirty ? { content: 'Save', onAction: () => setDirty(false) } : undefined}
+      secondaryActions={dirty ? [{ content: 'Discard', onAction: () => setDirty(false) }] : []}
+    >
+      <Layout>
+        <Layout.Section>
+          <BlockStack gap="400">
+            <CollapsibleCard
+              id="general"
+              title="General"
+              description="Defaults applied to every new quote."
+              defaultOpen
+            >
+              <FormLayout>
+                <FormLayout.Group>
+                  <TextField
+                    label="Default expiry (days)"
+                    type="number"
+                    value={expiry}
+                    onChange={(v) => { setExpiry(v); markDirty(); }}
+                    helpText="Editable per quote at creation."
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="Quote reference prefix"
+                    value={prefix}
+                    onChange={(v) => { setPrefix(v); markDirty(); }}
+                    helpText={`e.g. ${prefix}00${nextNum || '148'}`}
+                    autoComplete="off"
+                  />
+                  <TextField
+                    label="Next quote number"
+                    type="number"
+                    value={nextNum}
+                    onChange={(v) => { setNextNum(v); markDirty(); }}
+                    helpText="Increments automatically after each save."
+                    autoComplete="off"
+                  />
+                </FormLayout.Group>
+              </FormLayout>
+            </CollapsibleCard>
+
+            <CollapsibleCard
+              id="list"
+              title="List settings"
+              description="Controls the storefront 'Your Saved Quotes' block."
+            >
+              <ListSettingsBody />
+            </CollapsibleCard>
+
+            <CollapsibleCard
+              id="pdf"
+              title="PDF settings"
+              description="Controls the PDF buyers receive over email."
+            >
+              <PdfSettingsBody />
+            </CollapsibleCard>
+          </BlockStack>
+        </Layout.Section>
+      </Layout>
+    </Page>
+  );
+}
+
+// ───── Stub feature pages (Companies, Users, Roles, Catalogs, etc.) ─────
+const COMPANIES = [
+  { id: 'C-1042', name: 'Atlas Industries', loc: 'Houston, TX', users: 14, ytd: 284500, terms: 'Net 45', status: 'active' },
+  { id: 'C-1041', name: 'Redline Supply Co', loc: 'Phoenix, AZ', users: 6, ytd: 98200, terms: 'Net 30', status: 'active' },
+  { id: 'C-1040', name: 'Greenfield Mfg', loc: 'Detroit, MI', users: 22, ytd: 412800, terms: 'Net 60', status: 'active' },
+  { id: 'C-1039', name: 'Pacific Wholesale', loc: 'Portland, OR', users: 4, ytd: 22400, terms: 'Net 30', status: 'pending' },
+  { id: 'C-1038', name: 'Summit Electric', loc: 'Denver, CO', users: 9, ytd: 156300, terms: 'Net 45', status: 'inactive' },
+];
+const USERS = [
+  { id: 'U-301', name: 'James Rodriguez', email: 'j.rodriguez@atlasind.com', company: 'Atlas Industries', role: 'Buyer', last: '2h ago' },
+  { id: 'U-302', name: 'Sarah Kim', email: 's.kim@redline.co', company: 'Redline Supply Co', role: 'Approver', last: '1d ago' },
+  { id: 'U-303', name: 'Tom Nguyen', email: 't.nguyen@greenfield.com', company: 'Greenfield Mfg', role: 'Buyer', last: '3h ago' },
+  { id: 'U-304', name: 'Lisa Park', email: 'l.park@pacificwhsl.com', company: 'Pacific Wholesale', role: 'Buyer', last: '5d ago' },
+  { id: 'U-305', name: 'David Chen', email: 'd.chen@summitelec.com', company: 'Summit Electric', role: 'Admin', last: 'Just now' },
+];
+const ROLES = [
+  { name: 'Admin', users: 3, perms: 'Full access · Manage users · Approve quotes · Edit catalogs' },
+  { name: 'Approver', users: 8, perms: 'Approve quotes · View pricing · Manage assigned buyers' },
+  { name: 'Buyer', users: 42, perms: 'Create quotes · Place orders · View own history' },
+  { name: 'Viewer', users: 6, perms: 'Read-only access to assigned company data' },
+];
+
+function CompaniesPage() {
+  const rows = COMPANIES.map((c, i) => (
+    <IndexTable.Row id={c.id} key={c.id} position={i}>
+      <IndexTable.Cell><Mono>{c.id}</Mono></IndexTable.Cell>
+      <IndexTable.Cell><Text fontWeight="medium">{c.name}</Text></IndexTable.Cell>
+      <IndexTable.Cell><Text>{c.loc}</Text></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{c.users}</Mono></Text></IndexTable.Cell>
+      <IndexTable.Cell><Text alignment="end" numeric><Mono>{fmt$(c.ytd)}</Mono></Text></IndexTable.Cell>
+      <IndexTable.Cell><Text>{c.terms}</Text></IndexTable.Cell>
+      <IndexTable.Cell><Badge tone={c.status === 'active' ? 'success' : c.status === 'pending' ? 'warning' : undefined}>{c.status}</Badge></IndexTable.Cell>
+    </IndexTable.Row>
+  ));
+  return (
+    <Card padding="0">
+      <IndexTable
+        resourceName={{ singular: 'company', plural: 'companies' }}
+        itemCount={COMPANIES.length}
+        selectable={false}
+        headings={[
+          { title: 'ID' }, { title: 'Company' }, { title: 'Location' },
+          { title: 'Users', alignment: 'end' }, { title: 'YTD volume', alignment: 'end' },
+          { title: 'Terms' }, { title: 'Status' },
+        ]}
+      >{rows}</IndexTable>
+    </Card>
+  );
+}
+
+function UsersPage() {
+  const rows = USERS.map((u, i) => (
+    <IndexTable.Row id={u.id} key={u.id} position={i}>
+      <IndexTable.Cell><Text fontWeight="medium">{u.name}</Text></IndexTable.Cell>
+      <IndexTable.Cell><Mono variant="bodySm">{u.email}</Mono></IndexTable.Cell>
+      <IndexTable.Cell><Text>{u.company}</Text></IndexTable.Cell>
+      <IndexTable.Cell><Badge>{u.role}</Badge></IndexTable.Cell>
+      <IndexTable.Cell><Text variant="bodySm" tone="subdued">{u.last}</Text></IndexTable.Cell>
+    </IndexTable.Row>
+  ));
+  return (
+    <Card padding="0">
+      <IndexTable
+        resourceName={{ singular: 'user', plural: 'users' }}
+        itemCount={USERS.length}
+        selectable={false}
+        headings={[{ title: 'Name' }, { title: 'Email' }, { title: 'Company' }, { title: 'Role' }, { title: 'Last seen' }]}
+      >{rows}</IndexTable>
+    </Card>
+  );
+}
+
+function RolesPage() {
+  return (
+    <BlockStack gap="300">
+      {ROLES.map(r => (
+        <Card key={r.name}>
+          <InlineStack align="space-between" blockAlign="start" wrap={false}>
+            <BlockStack gap="100">
+              <InlineStack gap="200" blockAlign="center">
+                <Text variant="headingSm">{r.name}</Text>
+                <Badge>{`${r.users} users`}</Badge>
+              </InlineStack>
+              <Text tone="subdued">{r.perms}</Text>
+            </BlockStack>
+            <ButtonGroup><Button>Edit permissions</Button></ButtonGroup>
+          </InlineStack>
+        </Card>
+      ))}
+    </BlockStack>
+  );
+}
+
+function StubPage({ title, body }) {
+  return <Card><BlockStack gap="200"><Text variant="headingSm">{title}</Text><Text tone="subdued">{body}</Text></BlockStack></Card>;
+}
+
+// ───── IA structures ─────
+// Pattern 1 — Flat NavMenu, settings as tabs inside each feature
+const PATTERN_1 = [
+  { id: 'dashboard', label: 'Dashboard' },
+  { id: 'quotes', label: 'Quotes', tabs: [
+    { id: 'all', label: 'All quotes' },
+    { id: 'settings', label: 'Settings' },
+  ]},
+  { id: 'companies', label: 'Companies', tabs: [
+    { id: 'list', label: 'Companies' },
+    { id: 'company-settings', label: 'Settings' },
+  ]},
+  { id: 'users', label: 'Users & Roles', tabs: [
+    { id: 'users', label: 'Users' },
+    { id: 'roles', label: 'Roles' },
+    { id: 'permissions', label: 'Permissions' },
+  ]},
+  { id: 'catalogs', label: 'Catalogs', tabs: [
+    { id: 'price-lists', label: 'Price lists' },
+    { id: 'volume-discounts', label: 'Volume discounts' },
+    { id: 'catalog-settings', label: 'Settings' },
+  ]},
+  { id: 'general', label: 'General settings' },
+];
+
+// Map a (tab) id → renderable feature page
+function renderFeaturePage(tabId, ctx) {
+  switch (tabId) {
+    case 'all':
+    case 'quotes':
+      return <QuotesDashboard onOpenQuote={ctx.onOpenQuote} />;
+    case 'settings':
+    case 'list-settings':
+    case 'pdf-settings': return <QuoteSettingsPage />;
+    case 'list':
+    case 'companies':     return <CompaniesPage />;
+    case 'users':         return <UsersPage />;
+    case 'roles':         return <RolesPage />;
+    case 'permissions':   return <StubPage title="Permissions matrix" body="Define what each role can do, per resource type. Inherits from role definitions; overrides per company." />;
+    case 'price-lists':   return <StubPage title="Price lists" body="B2B-specific pricing per company or company group. Imports CSV; supports tiered pricing." />;
+    case 'volume-discounts': return <StubPage title="Volume discounts" body="Threshold-based discounts that apply automatically at cart and quote time." />;
+    case 'company-settings': return <StubPage title="Company settings" body="Default credit limits, payment terms, approval routing rules." />;
+    case 'catalog-settings': return <StubPage title="Catalog settings" body="Hide products from B2B browsing, override storefront copy, manage feature flags." />;
+    case 'general':       return <StubPage title="General" body="Time zone, currency, default email sender, plan & usage." />;
+    case 'branding':      return <StubPage title="Branding" body="Logos, colors, and typography applied across PDFs, emails, and the storefront block." />;
+    case 'integrations':  return <StubPage title="Integrations" body="ERP sync (NetSuite, SAP), SSO providers, webhook subscribers." />;
+    case 'billing':       return <StubPage title="Billing" body="Plan, seats, and invoices for B2B Supercharge itself." />;
+    default: return <StubPage title={tabId} body="Stub page — out of mock scope." />;
+  }
+}
+
+// ───── Shopify admin shell mock ─────
+function ShopifyShell({ children, ia, currentRoot, onNavRoot }) {
+  return (
+    <div className="sh-root">
+      <aside className="sh-rail">
+        <div className="shop"><span className="dot">A</span><span>atlasind.myshopify.com</span></div>
+        {[
+          { l: 'Home', ic: '🏠' },
+          { l: 'Orders', ic: '📦' },
+          { l: 'Products', ic: '🏷' },
+          { l: 'Customers', ic: '👤' },
+          { l: 'Marketing', ic: '📣' },
+          { l: 'Discounts', ic: '%' },
+          { l: 'Content', ic: '📝' },
+          { l: 'Analytics', ic: '📊' },
+        ].map(x => (
+          <div key={x.l} className="item"><span className="ic">{x.ic}</span><span>{x.l}</span></div>
+        ))}
+        <div className="grp">Sales channels</div>
+        <div className="item"><span className="ic">🛒</span><span>Online Store</span></div>
+        <div className="grp">Apps</div>
+        <div className="item app"><span className="ic">⚡</span><span>B2B Supercharge</span></div>
+        <div className="sub">
+          {ia.map(entry => (
+            <div
+              key={entry.id}
+              className={`item ${currentRoot === entry.id ? 'active' : ''}`}
+              onClick={() => onNavRoot(entry.id)}
+            >{entry.label}</div>
+          ))}
+        </div>
+      </aside>
+      <div className="sh-content">
+        <div className="sh-topbar">
+          <div className="search">Search</div>
+          <div style={{ flex: 1 }} />
+          <div className="pill">Plus</div>
+          <div className="pill">JR</div>
+        </div>
+        <div className="sh-stage">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ───── Dashboard ─────
+function Dashboard({ onNav }) {
+  return (
+    <Page title="B2B Supercharge" subtitle="Atlas Industries · Houston, TX · Plus plan" titleMetadata={<Badge tone="success">Connected</Badge>} primaryAction={{ content: 'Create quote' }}>
+      <Layout>
+        <Layout.Section>
+          <InlineGrid columns={{ xs: 2, md: 4 }} gap="400">
+            {[
+              { l: 'Active quotes', v: '24', d: '↑ 12%' },
+              { l: 'Pipeline volume', v: '$284K', d: '↑ 8%' },
+              { l: 'Pending approvals', v: '3', d: '↓ 2', tone: 'critical' },
+              { l: 'Conversion', v: '68%', d: '↑ 4 pts' },
+            ].map(s => (
+              <Card key={s.l}>
+                <BlockStack gap="100">
+                  <Text variant="bodySm" tone="subdued">{s.l}</Text>
+                  <Mono variant="headingLg">{s.v}</Mono>
+                  <Text variant="bodySm" tone={s.tone || 'success'}>{s.d}</Text>
+                </BlockStack>
+              </Card>
+            ))}
+          </InlineGrid>
+        </Layout.Section>
+        <Layout.Section>
+          <Card>
+            <BlockStack gap="200">
+              <Text variant="headingSm">Quick setup</Text>
+              <Box paddingBlockStart="100">
+                <BlockStack gap="0">
+                  {[
+                    { id: 'settings', label: 'Quote settings', meta: <Badge tone="info">3 sections</Badge> },
+                    { id: 'general', label: 'Email templates', meta: <Badge>{'2 of 3 set'}</Badge> },
+                  ].map((r, i) => (
+                    <Box key={r.id} paddingBlock="300" borderBlockStartWidth={i ? '025' : '0'} borderColor="border">
+                      <InlineStack align="space-between" blockAlign="center">
+                        <Button variant="plain" onClick={() => onNav(r.id)}>{r.label}</Button>
+                        {r.meta}
+                      </InlineStack>
+                    </Box>
+                  ))}
+                </BlockStack>
+              </Box>
+            </BlockStack>
+          </Card>
+        </Layout.Section>
+      </Layout>
+    </Page>
+  );
+}
+
+// ───── Tabbed feature page (Polaris Tabs inside Page) ─────
+function TabbedPage({ entry, activeTab, onTab, ctx }) {
+  const labelOf = (id) => entry.tabs.find(t => t.id === id)?.label || id;
+  const tabs = entry.tabs.map(t => ({ id: t.id, content: t.label, panelID: `panel-${t.id}` }));
+  const selectedIdx = Math.max(0, entry.tabs.findIndex(t => t.id === activeTab));
+
+  return (
+    <Page title={entry.label}>
+      <Layout>
+        <Layout.Section>
+          <Card padding="0">
+            <Tabs tabs={tabs} selected={selectedIdx} onSelect={(i) => onTab(entry.tabs[i].id)} />
+            <div style={{ borderTop: '1px solid var(--p-color-border)' }}>
+              {renderFeaturePage(activeTab, ctx)}
+            </div>
+          </Card>
+        </Layout.Section>
+      </Layout>
+    </Page>
+  );
+}
+
+// ───── Root ─────
+function App() {
+  const ia = PATTERN_1;
+  const [rootId, setRootId] = useState('quotes');
+  const [tabId, setTabId] = useState('all');
+  const [quote, setQuote] = useState(null);
+
+  const navRoot = (id) => {
+    setRootId(id);
+    const entry = ia.find(x => x.id === id);
+    setTabId(entry?.tabs?.[0]?.id || id);
+    setQuote(null);
+  };
+
+  const ctx = { onOpenQuote: (q) => { setQuote(q); } };
+  const entry = ia.find(e => e.id === rootId);
+
+  let content;
+  if (quote) {
+    content = <QuoteDetail quote={quote} onBack={() => setQuote(null)} />;
+  } else if (rootId === 'dashboard') {
+    content = <Dashboard onNav={(id) => {
+      const parent = ia.find(e => e.tabs?.some(t => t.id === id));
+      if (parent) { setRootId(parent.id); setTabId(id); }
+      else { navRoot(id); }
+    }} />;
+  } else if (entry?.tabs) {
+    content = <TabbedPage entry={entry} activeTab={tabId} onTab={setTabId} ctx={ctx} />;
+  } else {
+    content = (
+      <Page title={entry?.label || rootId}>
+        <Layout><Layout.Section>{renderFeaturePage(rootId, ctx)}</Layout.Section></Layout>
+      </Page>
+    );
+  }
+
+  return (
+    <AppProvider i18n={enTranslations}>
+      <ShopifyShell ia={ia} currentRoot={rootId} onNavRoot={navRoot}>
+        <Frame>{content}</Frame>
+      </ShopifyShell>
+    </AppProvider>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
+</script>
+
+</body>
+</html>
